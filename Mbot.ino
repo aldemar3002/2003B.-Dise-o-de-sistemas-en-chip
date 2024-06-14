@@ -111,6 +111,51 @@ void runBackwardM4() {
     PORTC &= ~(1 << PC0); // Apagar la dirección opuesta
 }
 
+// Tareas de FreeRTOS para cada función de movimiento
+void runForwardTask(void *pvParameters) {
+    for (;;) {
+        runForwardM1();
+        runForwardM2();
+        runForwardM3();
+        runForwardM4();
+        vTaskDelay(pdMS_TO_TICKS(100)); // Ajustar el tiempo de retardo según sea necesario
+    }
+}
+
+void runBackwardTask(void *pvParameters) {
+    for (;;) {
+        runBackwardM1();
+        runBackwardM2();
+        runBackwardM3();
+        runBackwardM4();
+        vTaskDelay(pdMS_TO_TICKS(100)); // Ajustar el tiempo de retardo según sea necesario
+    }
+}
+
+void turnRightTask(void *pvParameters) {
+    for (;;) {
+        runForwardM3();
+        runForwardM4();
+        runBackwardM1();
+        runBackwardM2();
+        vTaskDelay(pdMS_TO_TICKS(1500)); // Ajustar el tiempo de retardo según sea necesario
+        stopMotor();
+        vTaskDelay(pdMS_TO_TICKS(100)); // Ajustar el tiempo de retardo según sea necesario
+    }
+}
+
+void turnLeftTask(void *pvParameters) {
+    for (;;) {
+        runForwardM1();
+        runForwardM2();
+        runBackwardM3();
+        runBackwardM4();
+        vTaskDelay(pdMS_TO_TICKS(1500)); // Ajustar el tiempo de retardo según sea necesario
+        stopMotor();
+        vTaskDelay(pdMS_TO_TICKS(100)); // Ajustar el tiempo de retardo según sea necesario
+    }
+}
+
 // Funciones de movimiento para todos los motores
 void runForward() {
     TCCR1A |= (1<<COM1A1)| (1<<COM1B1);
@@ -130,24 +175,6 @@ void runBackward() {
     runBackwardM4();
 }
 
-void turnRight() {
-    TCCR1A |= (1<<COM1A1)| (1<<COM1B1);
-    TCCR4A |= (1<<COM4B1) | (1<<COM4C1);
-    runForwardM3();
-    runForwardM4();
-    runBackwardM1();
-    runBackwardM2();
-}
-
-void turnLeft() {
-    TCCR1A |= (1<<COM1A1)| (1<<COM1B1);
-    TCCR4A |= (1<<COM4B1) | (1<<COM4C1);
-    runForwardM1();
-    runForwardM2();
-    runBackwardM3();
-    runBackwardM4();
-}
-
 void stopMotor() {
     TCCR1A &= ~((1<<COM1A1) | (1<<COM1B1));
     TCCR4A &= ~((1<<COM4B1) | (1<<COM4C1));
@@ -163,27 +190,30 @@ void manualControlTask(void *pvParameters) {
             if (command == 'F' || command == 'X' || command == 'R' || command == 'L' || command == 'G' || command == 'M' || command == 'Q') {
                 switch (command) {
                     case 'F':
-                        if (manualMode) runForward(); // Ejecutar comando hacia adelante en modo manual
+                        if (manualMode) {
+                            xTaskCreate(runForwardTask, "RunForward", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+                        }
                         break;
                     case 'X':
-                        if (manualMode) runBackward(); // Ejecutar comando hacia atrás en modo manual
+                        if (manualMode) {
+                            stopMotor();
+                            vTaskDelete(NULL); // Eliminar la tarea actual
+                        }
                         break;
                     case 'R':
                         if (manualMode) {
-                            turnRight(); // Ejecutar comando para girar a la derecha en modo manual
-                            vTaskDelay(pdMS_TO_TICKS(1500)); // Duración de 1.5 segundos
-                            stopMotor(); // Detener motores
+                            xTaskCreate(turnRightTask, "TurnRight", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
                         }
                         break;
                     case 'L':
                         if (manualMode) {
-                            turnLeft(); // Ejecutar comando para girar a la izquierda en modo manual
-                            vTaskDelay(pdMS_TO_TICKS(1500)); // Duración de 1.5 segundos
-                            stopMotor(); // Detener motores
+                            xTaskCreate(turnLeftTask, "TurnLeft", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
                         }
                         break;
                     case 'G':
-                        if (manualMode) stopMotor(); // Detener motores
+                        if (manualMode) {
+                            xTaskCreate(runBackwardTask, "RunBackward", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+                        }
                         break;
                     case 'M':
                         if (!manualMode) {
@@ -213,7 +243,7 @@ void collisionTask(void *pvParameters) {
                     runForward();
                 } else {
                     currentDirection = BACKWARD;
-                    runBackward(); // Cambiar a marcha atrás
+                    xTaskCreate(runBackwardTask, "RunBackward", configMINIMAL_STACK_SIZE, NULL, 1, NULL); // Cambiar a marcha atrás
                     sendUART2('W'); // Envía el comando para atrasar canción
                 }
             } else if (currentDirection == BACKWARD) {
@@ -221,7 +251,7 @@ void collisionTask(void *pvParameters) {
                     runBackward();
                 } else {
                     currentDirection = FORWARD;
-                    runForward(); // Cambiar a marcha adelante
+                    xTaskCreate(runForwardTask, "RunForward", configMINIMAL_STACK_SIZE, NULL, 1, NULL); // Cambiar a marcha adelante
                     sendUART2('S'); // Envía el comando para adelantar canción
                 }
             }
