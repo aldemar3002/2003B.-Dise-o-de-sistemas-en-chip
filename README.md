@@ -2,7 +2,9 @@
 TE2003B. Diseño de sistemas en chip
 
 Yestli Sánchez 
+
 Josué Aldemar Garduño Gómez
+
 Mariam Landa Bautista
 
 LINK DE VIDEO FINAL:
