@@ -13,6 +13,11 @@
 #define USART_BAUDRATE 9600
 #define UBRR_VALUE (((F_CPU / (USART_BAUDRATE * 16UL))) - 1)
 
+TaskHandle_t runForwardHandle = NULL;
+TaskHandle_t runBackwardHandle = NULL;
+TaskHandle_t turnRightHandle = NULL;
+TaskHandle_t turnLeftHandle = NULL;
+
 // Configuración de PWM para los motores
 void setupPWM() {
     // Configurar Timer1 para Motor 1 y Motor 2
@@ -166,25 +171,46 @@ void manualControlTask(void *pvParameters) {
     while (1) {
         if (UCSR2A & (1 << RXC2)) { // Si hay datos disponibles en UART2
             char command = receiveUART2(); // Leer el comando
-            if (command == 'F' || command == 'X' || command == 'R' || command == 'L' || command == 'G') {
-                switch (command) {
-                    case 'F':
-                        xTaskCreate(runForwardTask, "RunForward", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-                        break;
-                    case 'X':
-                        stopMotor();
-                        vTaskDelete(NULL); // Eliminar la tarea actual
-                        break;
-                    case 'R':
-                        xTaskCreate(turnRightTask, "TurnRight", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-                        break;
-                    case 'L':
-                        xTaskCreate(turnLeftTask, "TurnLeft", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-                        break;
-                    case 'G':
-                        xTaskCreate(runBackwardTask, "RunBackward", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-                        break;
-                }
+            switch (command) {
+                case 'F':
+                    if (runForwardHandle == NULL) {
+                        xTaskCreate(runForwardTask, "RunForward", configMINIMAL_STACK_SIZE, NULL, 1, &runForwardHandle);
+                    }
+                    break;
+                case 'X':
+                    stopMotor();
+                    if (runForwardHandle != NULL) {
+                        vTaskDelete(runForwardHandle);
+                        runForwardHandle = NULL;
+                    }
+                    if (runBackwardHandle != NULL) {
+                        vTaskDelete(runBackwardHandle);
+                        runBackwardHandle = NULL;
+                    }
+                    if (turnRightHandle != NULL) {
+                        vTaskDelete(turnRightHandle);
+                        turnRightHandle = NULL;
+                    }
+                    if (turnLeftHandle != NULL) {
+                        vTaskDelete(turnLeftHandle);
+                        turnLeftHandle = NULL;
+                    }
+                    break;
+                case 'R':
+                    if (turnRightHandle == NULL) {
+                        xTaskCreate(turnRightTask, "TurnRight", configMINIMAL_STACK_SIZE, NULL, 1, &turnRightHandle);
+                    }
+                    break;
+                case 'L':
+                    if (turnLeftHandle == NULL) {
+                        xTaskCreate(turnLeftTask, "TurnLeft", configMINIMAL_STACK_SIZE, NULL, 1, &turnLeftHandle);
+                    }
+                    break;
+                case 'G':
+                    if (runBackwardHandle == NULL) {
+                        xTaskCreate(runBackwardTask, "RunBackward", configMINIMAL_STACK_SIZE, NULL, 1, &runBackwardHandle);
+                    }
+                    break;
             }
         }
         vTaskDelay(pdMS_TO_TICKS(10)); // Retardo de 10 ms
